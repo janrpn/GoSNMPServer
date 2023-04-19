@@ -1,9 +1,12 @@
 package GoSNMPServer
 
-import "encoding/asn1"
-import "github.com/slayercat/gosnmp"
-import "strings"
-import "strconv"
+import (
+	"bytes"
+	"strconv"
+	"strings"
+
+	"github.com/slayercat/gosnmp"
+)
 
 func getPktContextOrCommunity(i *gosnmp.SnmpPacket) string {
 	if i.Version == gosnmp.Version3 {
@@ -33,11 +36,19 @@ func oidToByteString(oid string) string {
 		}
 		obj[i] = num
 	}
-	oidBytes, err := asn1.Marshal(obj)
-	if err != nil {
-		panic(err)
+	var buf bytes.Buffer
+	for _, b := range obj {
+		if b < 128 {
+			buf.WriteByte(byte(b))
+		} else {
+			for b > 0 {
+				buf.WriteByte(byte(0x80 | (b & 0x7f)))
+				b >>= 7
+			}
+			buf.Bytes()[buf.Len()-1] &= 0x7f
+		}
 	}
-	return string(oidBytes)
+	return buf.String()
 }
 
 // IsValidObjectIdentifier will check a oid string is valid oid
@@ -51,6 +62,6 @@ func IsValidObjectIdentifier(oid string) (result bool) {
 	if len(oid) == 0 {
 		return false
 	}
-	oidToByteString(oid)
+	oidToByteString(string(oid))
 	return true
 }

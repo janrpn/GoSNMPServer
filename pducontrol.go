@@ -2,6 +2,9 @@ package GoSNMPServer
 
 import (
 	"net"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/slayercat/gosnmp"
@@ -125,9 +128,67 @@ func (x byOID) Len() int {
 func (x byOID) Less(i, j int) bool {
 	stripedI := oidToByteString(x[i].OID)
 	stripedJ := oidToByteString(x[j].OID)
-	return stripedI < stripedJ
+	return string(stripedI) < string(stripedJ)
 }
 
 func (x byOID) Swap(i, j int) {
 	x[i], x[j] = x[j], x[i]
+}
+
+// func sortOIDs(oids []*PDUValueControlItem) {
+// 	sort.SliceStable(oids, func(i, j int) bool {
+
+// 		oid1str := strings.Split(oids[i].OID, ".")
+// 		oid1 := make([]int, len(oid1str))
+// 		for k, v := range oid1str {
+// 			n, _ := strconv.Atoi(v)
+// 			oid1[k] = n
+// 		}
+
+// 		oid2str := strings.Split(oids[j].OID, ".")
+// 		oid2 := make([]int, len(oid2str))
+// 		for k, v := range oid2str {
+// 			n, _ := strconv.Atoi(v)
+// 			oid2[k] = n
+// 		}
+
+// 		for k := 0; k < len(oid1) && k < len(oid2); k++ {
+// 			if oid1[k] < oid2[k] {
+// 				return true
+// 			} else if oid1[k] > oid2[k] {
+// 				return false
+// 			}
+// 		}
+
+// 		return len(oid1) < len(oid2)
+
+// 	})
+// }
+
+func sortOIDs(oids []*PDUValueControlItem) {
+	sort.Slice(oids, func(i, j int) bool {
+		oid1str := strings.Split(oids[i].OID, ".")
+		oid1 := make([]int, len(oid1str))
+		for k, v := range oid1str {
+			n, _ := strconv.Atoi(v)
+			oid1[k] = n
+		}
+
+		oid2str := strings.Split(oids[j].OID, ".")
+		oid2 := make([]int, len(oid2str))
+		for k, v := range oid2str {
+			n, _ := strconv.Atoi(v)
+			oid2[k] = n
+		}
+
+		for k := 0; k < len(oid1) && k < len(oid2); k++ {
+			if oid1[k] < oid2[k] {
+				return true
+			} else if oid1[k] > oid2[k] {
+				return false
+			}
+		}
+
+		return len(oid1) < len(oid2)
+	})
 }

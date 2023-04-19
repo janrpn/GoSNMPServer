@@ -1,10 +1,14 @@
 package GoSNMPServer
 
-import "strings"
-import "fmt"
-import "sort"
-import "github.com/slayercat/gosnmp"
-import "github.com/pkg/errors"
+import (
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/slayercat/gosnmp"
+)
 
 type SubAgent struct {
 	// ContextName selects from SNMPV3 ContextName or SNMPV1/V2c community for switch from SubAgent...
@@ -24,10 +28,14 @@ type SubAgent struct {
 }
 
 func (t *SubAgent) SyncConfig() error {
-	sort.Sort(byOID(t.OIDs))
+	//sort.Sort(byOID(t.OIDs))
+	sortOIDs(t.OIDs)
 	t.Logger.Infof("Total OIDs of %v: %v", t.CommunityIDs, len(t.OIDs))
 	for id, each := range t.OIDs {
 		t.Logger.Infof("OIDs of %v: %v", t.CommunityIDs, each.OID)
+		if t.OIDs[id].OID == ".1.3.6.1.4.1.637.61.1.35.21.58.1.25.128450560.146" {
+			t.Logger.Infof("BLA BLA OID: %s Check: %d", t.OIDs[id].OID, id)
+		}
 		if id != 0 && t.OIDs[id].OID == t.OIDs[id-1].OID {
 			verr := fmt.Sprintf("community %v: meet duplicate oid %v", t.CommunityIDs, each.OID)
 			t.Logger.Errorf(verr)
@@ -267,6 +275,7 @@ func (t *SubAgent) serveGetBulkRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket
 	vc := uint8(len(i.Variables))
 	t.Logger.Debugf("serveGetBulkRequest (vars=%d, non-repeaters=%d, max-repetitions=%d", vc, i.NonRepeaters, i.MaxRepetitions)
 
+	eomv := make(map[string]struct{})
 	// handle Non-Repeaters
 	t.Logger.Debugf("handle non-repeaters (%d)", i.NonRepeaters)
 	for j := uint8(0); j < i.NonRepeaters; j++ {
@@ -289,7 +298,7 @@ func (t *SubAgent) serveGetBulkRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket
 	}
 
 	t.Logger.Debugf("handle remaining (%d, max-repetitions=%d)", vc-i.NonRepeaters, i.MaxRepetitions)
-	eomv := make(map[string]struct{})
+
 	for j := uint8(0); j < i.MaxRepetitions; j++ { // loop through repetitions
 		for k := i.NonRepeaters; k < vc; k++ { // loop through "repeaters"
 			queryForOid := i.Variables[k].Name
@@ -329,13 +338,16 @@ func (t *SubAgent) serveGetNextRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket
 	queryForOid := i.Variables[length-1].Name
 	queryForOidStriped := strings.TrimLeft(queryForOid, ".0")
 	t.Logger.Debugf("serveGetNextRequest of %v", queryForOid)
+	//sortOIDs(t.OIDs)
 	item, id := t.getForPDUValueControl(queryForOidStriped)
 	t.Logger.Debugf("t.getForPDUValueControl. query_for_oid=%v item=%v id=%v", queryForOid, item, id)
 	if item != nil {
 		id += 1
 	}
+	//t.Logger.Infof("OID: %s ID: %d, LEN: %d", t.OIDs[id], id, len(t.OIDs))
 	if id >= len(t.OIDs) {
 		// NOT find for the last
+		t.Logger.Info("WHHHHHHHHHHAAAAAAAAAAAAAAAAATTTTTTTTTTT")
 		ret.Variables = append(ret.Variables, t.getPDUEndOfMibView(queryForOid))
 		return &ret, nil
 	}
@@ -445,13 +457,58 @@ func (t *SubAgent) getForPDUValueControl(oid string) (*PDUValueControlItem, int)
 	toQuery := oidToByteString(oid)
 	i := sort.Search(len(t.OIDs), func(i int) bool {
 		thisOid := oidToByteString(t.OIDs[i].OID)
-		return thisOid >= toQuery
+		return string(thisOid) >= string(toQuery)
 	})
 	if i < len(t.OIDs) {
 		thisOid := oidToByteString(t.OIDs[i].OID)
-		if thisOid == toQuery {
+		if string(thisOid) == string(toQuery) {
 			return t.OIDs[i], i
 		}
 	}
+	t.Logger.Info("BLAAAAAAAAAAAAAAAAAAAA: ", i)
 	return nil, i
+}
+
+// func (t *SubAgent) getForPDUValueControl(oid string) (*PDUValueControlItem, int) {
+// 	toQuery := []byte(oid)
+// 	i := sort.Search(len(t.OIDs), func(i int) bool {
+// 		thisOid := []byte(t.OIDs[i].OID)
+// 		return bytes.Compare(thisOid, toQuery) >= 0
+// 	})
+// 	if i < len(t.OIDs) {
+// 		thisOid := []byte(t.OIDs[i].OID)
+// 		if bytes.Equal(thisOid[:len(toQuery)], toQuery) {
+// 			return t.OIDs[i], i
+// 		}
+// 	}
+// 	return nil, i
+// }
+
+func oidToIntSlice(oid string) []int {
+	parts := strings.Split(oid, ".")
+	result := make([]int, len(parts))
+	for i, part := range parts {
+		result[i], _ = strconv.Atoi(part)
+	}
+	return result
+}
+func compareOIDs(oid1, oid2 []int) int {
+	n := len(oid1)
+	if len(oid2) < n {
+		n = len(oid2)
+	}
+	for i := 0; i < n; i++ {
+		if oid1[i] < oid2[i] {
+			return -1
+		} else if oid1[i] > oid2[i] {
+			return 1
+		}
+	}
+	if len(oid1) < len(oid2) {
+		return -1
+	} else if len(oid1) > len(oid2) {
+		return 1
+	} else {
+		return 0
+	}
 }
