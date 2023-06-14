@@ -63,7 +63,7 @@ func (suite *ServerTests) TestErrors() {
 				CommunityIDs: []string{"public"},
 				OIDs: []*PDUValueControlItem{
 					{
-						OID:  "1.2.4.0",
+						OID:  "1.2.4.1",
 						Type: gosnmp.Integer,
 						OnGet: func() (value interface{}, err error) {
 							return Asn1IntegerWrap(0), nil
@@ -71,7 +71,7 @@ func (suite *ServerTests) TestErrors() {
 						Document: "",
 					},
 					{
-						OID:  "1.2.4.1",
+						OID:  "1.2.4.2",
 						Type: gosnmp.IPAddress,
 						OnGet: func() (value interface{}, err error) {
 							return nil, errors.New("TestError")
@@ -82,7 +82,7 @@ func (suite *ServerTests) TestErrors() {
 						Document: "TestError",
 					},
 					{
-						OID:  "1.2.4.2",
+						OID:  "1.2.4.3",
 						Type: gosnmp.IPAddress,
 						OnGet: func() (value interface{}, err error) {
 							panic(errors.New("TestError"))
@@ -93,7 +93,7 @@ func (suite *ServerTests) TestErrors() {
 						Document: "TestPanic",
 					},
 					{
-						OID:         "1.2.4.3",
+						OID:         "1.2.4.4",
 						Type:        gosnmp.IPAddress,
 						NonWalkable: true,
 						OnGet: func() (value interface{}, err error) {
@@ -103,7 +103,7 @@ func (suite *ServerTests) TestErrors() {
 						Document: "NonWalkable",
 					},
 					{
-						OID:         "1.2.4.4",
+						OID:         "1.2.4.5",
 						Type:        gosnmp.OctetString,
 						NonWalkable: true,
 						OnCheckPermission: func(pktVersion gosnmp.SnmpVersion, pduType gosnmp.PDUType, contextName string) PermissionAllowance {
@@ -120,7 +120,7 @@ func (suite *ServerTests) TestErrors() {
 						Document: "PermissionDenied",
 					},
 					{
-						OID:  "1.2.4.5",
+						OID:  "1.2.4.6",
 						Type: gosnmp.OctetString,
 						OnGet: func() (value interface{}, err error) {
 							return "1t&1ZZvY750j", nil
@@ -129,13 +129,22 @@ func (suite *ServerTests) TestErrors() {
 						Document: "Try some Nonwalkable Items",
 					},
 					{
-						OID:   "1.2.4.6",
+						OID:   "1.2.4.7",
 						Type:  gosnmp.OctetString,
 						OnGet: nil,
 						OnSet: func(value interface{}) (err error) {
 							return nil
 						},
 						Document: "SetOnly",
+					},
+					{
+						OID:  "1.2.4.8",
+						Type: gosnmp.OctetString,
+						OnGet: func() (value interface{}, err error) {
+							return "1t&1FFvY750j", nil
+						},
+						OnSet:    nil, // set will failture
+						Document: "Try some Nonwalkable Items",
 					},
 				},
 			},
@@ -168,7 +177,7 @@ func (suite *ServerTests) TestErrors() {
 	})
 	suite.Run("SNMPGetPermissionDenied", func() {
 		result, err := getCmdOutput("snmpget", "-v2c", "-c", "public",
-			serverAddress.String(), "1.2.4.4")
+			serverAddress.String(), "1.2.4.5")
 		assert.NotNil(suite.T(), err)
 		resultStr := string(result)
 		assert.NotContainsf(suite.T(), resultStr, "B40y0&OAA6Pm", "get result %v", string(result))
@@ -176,14 +185,14 @@ func (suite *ServerTests) TestErrors() {
 	})
 	suite.Run("SNMPSetPermissionDenied", func() {
 		result, err := getCmdOutput("snmpset", "-v2c", "-c", "public",
-			serverAddress.String(), "1.2.4.4", "i", "1")
+			serverAddress.String(), "1.2.4.5", "i", "1")
 		assert.NotNil(suite.T(), err)
 		resultStr := string(result)
 		assert.Equalf(suite.T(), false, getedPriv, "geted=%v", resultStr)
 	})
 	suite.Run("TryGetSetOnlyOID", func() {
 		result, err := getCmdOutput("snmpget", "-v2c", "-c", "public",
-			serverAddress.String(), "1.2.4.6")
+			serverAddress.String(), "1.2.4.7")
 		assert.NotNilf(suite.T(), err, "geted=%v", string(result))
 	})
 	suite.Run("TryAccessNonExistsOID", func() {
@@ -198,7 +207,7 @@ func (suite *ServerTests) TestErrors() {
 	suite.Run("SNMPSet", func() {
 		suite.Run("ERROR-RETURN", func() {
 			result, err := getCmdOutput("snmpset", "-v2c", "-c", "public", serverAddress.String(),
-				"1.2.4.1", "a", "1.2.3.13")
+				"1.2.4.2", "a", "1.2.3.13")
 			if err != nil {
 				errmsg := string(err.(*exec.ExitError).Stderr)
 				if !strings.Contains(errmsg, "Reason: (genError) A general failure occured") {
@@ -209,7 +218,7 @@ func (suite *ServerTests) TestErrors() {
 		})
 		suite.Run("PANIC-RETURN", func() {
 			result, err := getCmdOutput("snmpset", "-v2c", "-c", "public", serverAddress.String(),
-				"1.2.4.2", "a", "1.2.3.13")
+				"1.2.4.3", "a", "1.2.3.13")
 			if err != nil {
 				errmsg := string(err.(*exec.ExitError).Stderr)
 				if !strings.Contains(errmsg, "Reason: (genError) A general failure occured") {
@@ -288,7 +297,7 @@ func (suite *ServerTests) TestGetSetOids() {
 			suite.T().Errorf("cmd meet error: %+v", err)
 		}
 		lines := bytes.Split(bytes.TrimSpace(result), []byte("\n"))
-		assert.Equalf(suite.T(), len(master.SubAgents[0].OIDs)+1, len(lines), "data snmpwalk gets: \n%v", string(result))
+		assert.Equalf(suite.T(), len(master.SubAgents[0].OIDs), len(lines), "data snmpwalk gets: \n%v", string(result))
 	})
 	suite.Run("SNMPSet", func() {
 		suite.Run("Integer", func() {
@@ -425,7 +434,7 @@ func (suite *ServerTests) TestGetSetOids() {
 				err, string(err.(*exec.ExitError).Stderr), string(result))
 		}
 		lines := bytes.Split(bytes.TrimSpace(result), []byte("\n"))
-		assert.Equalf(suite.T(), len(master.SubAgents[0].OIDs)+1, len(lines), "data snmpwalk gets: \n%v", string(result))
+		assert.Equalf(suite.T(), len(master.SubAgents[0].OIDs), len(lines), "data snmpwalk gets: \n%v", string(result))
 	})
 	suite.Run("SNMPWalk_UnknownUser", func() {
 		result, err := getCmdOutput("snmpwalk", "-v3", "-n", "public", "-u", "UnknownUser",

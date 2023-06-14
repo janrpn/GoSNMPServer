@@ -1,11 +1,10 @@
 package GoSNMPServer
 
 import (
-	"bytes"
+	"github.com/pkg/errors"
+	"github.com/slayercat/gosnmp"
 	"strconv"
 	"strings"
-
-	"github.com/slayercat/gosnmp"
 )
 
 func getPktContextOrCommunity(i *gosnmp.SnmpPacket) string {
@@ -25,30 +24,24 @@ func copySnmpPacket(i *gosnmp.SnmpPacket) gosnmp.SnmpPacket {
 }
 
 func oidToByteString(oid string) string {
-	oid = strings.TrimLeft(oid, ".")
+	xi := strings.Split(oid, ".")
+	out := []rune{}
+	for id, each := range xi {
+		if each == "" {
+			if id == 0 {
+				continue
+			} else {
+				panic(errors.Errorf("oidToByteString not valid id. value=%v", oid))
+			}
 
-	components := strings.Split(oid, ".")
-	obj := make([]int, len(components))
-	for i, c := range components {
-		num, err := strconv.Atoi(c)
+		}
+		i, err := strconv.ParseInt(each, 10, 32)
 		if err != nil {
 			panic(err)
 		}
-		obj[i] = num
+		out = append(out, rune(i))
 	}
-	var buf bytes.Buffer
-	for _, b := range obj {
-		if b < 128 {
-			buf.WriteByte(byte(b))
-		} else {
-			for b > 0 {
-				buf.WriteByte(byte(0x80 | (b & 0x7f)))
-				b >>= 7
-			}
-			buf.Bytes()[buf.Len()-1] &= 0x7f
-		}
-	}
-	return buf.String()
+	return string(out)
 }
 
 // IsValidObjectIdentifier will check a oid string is valid oid
@@ -64,4 +57,23 @@ func IsValidObjectIdentifier(oid string) (result bool) {
 	}
 	oidToByteString(string(oid))
 	return true
+}
+
+func lessFunc(a, b string) bool {
+	aVals := strings.Split(strings.TrimPrefix(a, "."), ".")
+	bVals := strings.Split(strings.TrimPrefix(b, "."), ".")
+
+	for i := 0; i < len(aVals) && i < len(bVals); i++ {
+		ai, _ := strconv.Atoi(aVals[i])
+		bi, _ := strconv.Atoi(bVals[i])
+		if ai != bi {
+
+			return ai < bi
+		} else if ai > bi {
+			return ai > bi
+		}
+	}
+
+	return len(a) < len(b)
+
 }

@@ -2,12 +2,11 @@ package GoSNMPServer
 
 import (
 	"fmt"
+	"github.com/slayercat/gosnmp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/slayercat/gosnmp"
 )
 
 type SubAgent struct {
@@ -28,14 +27,12 @@ type SubAgent struct {
 }
 
 func (t *SubAgent) SyncConfig() error {
-	//sort.Sort(byOID(t.OIDs))
-	sortOIDs(t.OIDs)
+	sort.Slice(t.OIDs, func(i, j int) bool {
+		return lessFunc(t.OIDs[i].OID, t.OIDs[j].OID)
+	})
 	t.Logger.Infof("Total OIDs of %v: %v", t.CommunityIDs, len(t.OIDs))
 	for id, each := range t.OIDs {
 		t.Logger.Infof("OIDs of %v: %v", t.CommunityIDs, each.OID)
-		if t.OIDs[id].OID == ".1.3.6.1.4.1.637.61.1.35.21.58.1.25.128450560.146" {
-			t.Logger.Infof("BLA BLA OID: %s Check: %d", t.OIDs[id].OID, id)
-		}
 		if id != 0 && t.OIDs[id].OID == t.OIDs[id-1].OID {
 			verr := fmt.Sprintf("community %v: meet duplicate oid %v", t.CommunityIDs, each.OID)
 			t.Logger.Errorf(verr)
@@ -210,9 +207,15 @@ func (t *SubAgent) serveGetRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket, er
 		ret.Variables = append(ret.Variables, t.getPDUHelloVariable())
 		return &ret, nil
 	}
+
 	for id, varItem := range i.Variables {
-		item, _ := t.getForPDUValueControl(varItem.Name)
-		if item == nil {
+
+		queryForOid := i.Variables[id].Name
+		queryForOidStriped := strings.TrimSuffix(queryForOid, ".0")
+		queryForOidStriped = strings.TrimPrefix(queryForOidStriped, ".")
+		item, _ := t.getForPDUValueControl(queryForOidStriped)
+
+		if item == nil || item.OID != queryForOidStriped {
 			if ret.Error == gosnmp.NoError {
 				ret.Error = gosnmp.NoSuchName
 				ret.ErrorIndex = uint8(id)
@@ -338,16 +341,15 @@ func (t *SubAgent) serveGetNextRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket
 	queryForOid := i.Variables[length-1].Name
 	queryForOidStriped := strings.TrimLeft(queryForOid, ".0")
 	t.Logger.Debugf("serveGetNextRequest of %v", queryForOid)
-	//sortOIDs(t.OIDs)
+
 	item, id := t.getForPDUValueControl(queryForOidStriped)
 	t.Logger.Debugf("t.getForPDUValueControl. query_for_oid=%v item=%v id=%v", queryForOid, item, id)
 	if item != nil {
-		id += 1
+		id++
 	}
-	//t.Logger.Infof("OID: %s ID: %d, LEN: %d", t.OIDs[id], id, len(t.OIDs))
+
 	if id >= len(t.OIDs) {
 		// NOT find for the last
-		t.Logger.Info("WHHHHHHHHHHAAAAAAAAAAAAAAAAATTTTTTTTTTT")
 		ret.Variables = append(ret.Variables, t.getPDUEndOfMibView(queryForOid))
 		return &ret, nil
 	}
@@ -358,29 +360,30 @@ func (t *SubAgent) serveGetNextRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket
 		length = len(t.OIDs) - id
 	}
 	t.Logger.Debugf("i.Variables[id: length]. id=%v length =%v. len(t.OIDs)=%v", id, length, len(t.OIDs))
-	iid := id
+	nextIndex := id
 	for {
-		if iid >= len(t.OIDs) {
+
+		if nextIndex >= len(t.OIDs) {
 			break
 		}
-		item := t.OIDs[iid]
+		item := t.OIDs[nextIndex]
 		if len(ret.Variables) >= length {
 			break
 		}
 
 		if item.NonWalkable || item.OnGet == nil {
 			t.Logger.Debugf("getnext: oid=%v. skip for non walkable", item.OID)
-			iid += 1
+			nextIndex += 1
 			continue // skip non-walkable items
 		}
 		ctl, snmperr := t.getForPDUValueControlResult(item, i)
 		if snmperr != gosnmp.NoError && ret.Error == gosnmp.NoError {
 			ret.Error = snmperr
-			ret.ErrorIndex = uint8(iid)
+			ret.ErrorIndex = uint8(nextIndex)
 		}
 		t.Logger.Debugf("getnext: append oid=%v. result=%v err=%v", item.OID, ctl, snmperr)
 		ret.Variables = append(ret.Variables, ctl)
-		iid += 1
+		nextIndex += 1
 	}
 
 	if len(ret.Variables) == 0 {
@@ -454,61 +457,26 @@ func (t *SubAgent) serveSetRequest(i *gosnmp.SnmpPacket) (*gosnmp.SnmpPacket, er
 }
 
 func (t *SubAgent) getForPDUValueControl(oid string) (*PDUValueControlItem, int) {
-	toQuery := oidToByteString(oid)
-	i := sort.Search(len(t.OIDs), func(i int) bool {
-		thisOid := oidToByteString(t.OIDs[i].OID)
-		return string(thisOid) >= string(toQuery)
+	oid = strings.TrimLeft(oid, ".")
+
+	index := sort.Search(len(t.OIDs), func(i int) bool {
+		return lessFunc(oid, t.OIDs[i].OID)
 	})
-	if i < len(t.OIDs) {
-		thisOid := oidToByteString(t.OIDs[i].OID)
-		if string(thisOid) == string(toQuery) {
-			return t.OIDs[i], i
-		}
-	}
-	t.Logger.Info("BLAAAAAAAAAAAAAAAAAAAA: ", i)
-	return nil, i
-}
 
-// func (t *SubAgent) getForPDUValueControl(oid string) (*PDUValueControlItem, int) {
-// 	toQuery := []byte(oid)
-// 	i := sort.Search(len(t.OIDs), func(i int) bool {
-// 		thisOid := []byte(t.OIDs[i].OID)
-// 		return bytes.Compare(thisOid, toQuery) >= 0
-// 	})
-// 	if i < len(t.OIDs) {
-// 		thisOid := []byte(t.OIDs[i].OID)
-// 		if bytes.Equal(thisOid[:len(toQuery)], toQuery) {
-// 			return t.OIDs[i], i
-// 		}
-// 	}
-// 	return nil, i
-// }
+	if index < len(t.OIDs) && t.OIDs[index].OID == oid {
 
-func oidToIntSlice(oid string) []int {
-	parts := strings.Split(oid, ".")
-	result := make([]int, len(parts))
-	for i, part := range parts {
-		result[i], _ = strconv.Atoi(part)
-	}
-	return result
-}
-func compareOIDs(oid1, oid2 []int) int {
-	n := len(oid1)
-	if len(oid2) < n {
-		n = len(oid2)
-	}
-	for i := 0; i < n; i++ {
-		if oid1[i] < oid2[i] {
-			return -1
-		} else if oid1[i] > oid2[i] {
-			return 1
-		}
-	}
-	if len(oid1) < len(oid2) {
-		return -1
-	} else if len(oid1) > len(oid2) {
-		return 1
+		return t.OIDs[index-1], index - 1
+
+	} else if index > 0 && t.OIDs[index-1].OID == oid {
+
+		return t.OIDs[index-1], index - 1
+
+	} else if index != 0 && index < len(t.OIDs) {
+
+		return t.OIDs[index-1], index - 1
+	} else if index < len(t.OIDs) {
+		return t.OIDs[index], index
 	} else {
-		return 0
+		return nil, -1
 	}
 }

@@ -1,13 +1,9 @@
 package GoSNMPServer
 
 import (
-	"net"
-	"sort"
-	"strconv"
-	"strings"
-
 	"github.com/pkg/errors"
 	"github.com/slayercat/gosnmp"
+	"net"
 )
 
 // PermissionAllowance  ENUM controls for Allowance
@@ -19,19 +15,21 @@ const PermissionAllowanceAllowed PermissionAllowance = 0
 // PermissionAllowanceDenied denies for access
 const PermissionAllowanceDenied PermissionAllowance = 1
 
-//FuncPDUControlCheckPermission checks for permission.
-//   return PermissionAllowanceAllowed / PermissionAllowanceDenied
+// FuncPDUControlCheckPermission checks for permission.
+//
+//	return PermissionAllowanceAllowed / PermissionAllowanceDenied
 type FuncPDUControlCheckPermission func(pktVersion gosnmp.SnmpVersion, pduType gosnmp.PDUType, contextName string) PermissionAllowance
 
-//FuncPDUControlTrap will be called on trap.
-//    args:
-//		isInform: indicate if the request is a InformRequest.
-//          true  -- It's a InformRequest. data will be returns to the client
-//			false -- It's a trap.  data to returned will drop silencely.
-// 		trapdata: what client asks for.
-//    returns:
-//		dataret -- try to return to client. nil for nothing to return
-//		err  --  any error?(will return to client by string)
+// FuncPDUControlTrap will be called on trap.
+//
+//	   args:
+//			isInform: indicate if the request is a InformRequest.
+//	         true  -- It's a InformRequest. data will be returns to the client
+//				false -- It's a trap.  data to returned will drop silencely.
+//			trapdata: what client asks for.
+//	   returns:
+//			dataret -- try to return to client. nil for nothing to return
+//			err  --  any error?(will return to client by string)
 type FuncPDUControlTrap func(isInform bool, trapdata gosnmp.SnmpPDU) (dataret interface{}, err error)
 
 // FuncPDUControlGet will be called on get value
@@ -133,62 +131,4 @@ func (x byOID) Less(i, j int) bool {
 
 func (x byOID) Swap(i, j int) {
 	x[i], x[j] = x[j], x[i]
-}
-
-// func sortOIDs(oids []*PDUValueControlItem) {
-// 	sort.SliceStable(oids, func(i, j int) bool {
-
-// 		oid1str := strings.Split(oids[i].OID, ".")
-// 		oid1 := make([]int, len(oid1str))
-// 		for k, v := range oid1str {
-// 			n, _ := strconv.Atoi(v)
-// 			oid1[k] = n
-// 		}
-
-// 		oid2str := strings.Split(oids[j].OID, ".")
-// 		oid2 := make([]int, len(oid2str))
-// 		for k, v := range oid2str {
-// 			n, _ := strconv.Atoi(v)
-// 			oid2[k] = n
-// 		}
-
-// 		for k := 0; k < len(oid1) && k < len(oid2); k++ {
-// 			if oid1[k] < oid2[k] {
-// 				return true
-// 			} else if oid1[k] > oid2[k] {
-// 				return false
-// 			}
-// 		}
-
-// 		return len(oid1) < len(oid2)
-
-// 	})
-// }
-
-func sortOIDs(oids []*PDUValueControlItem) {
-	sort.Slice(oids, func(i, j int) bool {
-		oid1str := strings.Split(oids[i].OID, ".")
-		oid1 := make([]int, len(oid1str))
-		for k, v := range oid1str {
-			n, _ := strconv.Atoi(v)
-			oid1[k] = n
-		}
-
-		oid2str := strings.Split(oids[j].OID, ".")
-		oid2 := make([]int, len(oid2str))
-		for k, v := range oid2str {
-			n, _ := strconv.Atoi(v)
-			oid2[k] = n
-		}
-
-		for k := 0; k < len(oid1) && k < len(oid2); k++ {
-			if oid1[k] < oid2[k] {
-				return true
-			} else if oid1[k] > oid2[k] {
-				return false
-			}
-		}
-
-		return len(oid1) < len(oid2)
-	})
 }
